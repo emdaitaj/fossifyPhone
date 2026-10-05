@@ -59,6 +59,9 @@ import org.fossify.phone.extensions.startCallWithConfirmationCheck
 import org.fossify.phone.extensions.startContactDetailsIntent
 import org.fossify.phone.helpers.DIALPAD_TONE_LENGTH_MS
 import org.fossify.phone.helpers.RecentsHelper
+import org.fossify.phone.helpers.SilentBlockConfig
+import org.fossify.phone.helpers.SilentBlockEntriesRepository
+import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.helpers.ToneGeneratorHelper
 import org.fossify.phone.models.SpeedDial
 import java.util.Locale
@@ -93,6 +96,7 @@ class DialpadActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        SilentBlockEntriesRepository.preload(this)
         hasRussianLocale = Locale.getDefault().language == "ru"
 
         binding.apply {
@@ -192,7 +196,11 @@ class DialpadActivity : SimpleActivity() {
         binding.apply {
             dialpadClearChar.setOnClickListener { clearChar(it) }
             dialpadClearChar.setOnLongClickListener { clearInput(); true }
-            dialpadCallButton.setOnClickListener { initCall(dialpadInput.value) }
+            dialpadCallButton.setOnClickListener {
+                if (!openSilentBlockSettingsIfSecretCode()) {
+                    initCall(dialpadInput.value)
+                }
+            }
             dialpadCallButton.setOnLongClickListener { initCallWithSimSelector() }
             dialpadInput.onTextChangeListener { dialpadValueChanged(it) }
             dialpadInput.requestFocus()
@@ -284,6 +292,7 @@ class DialpadActivity : SimpleActivity() {
             allContacts.addAll(privateContacts)
             allContacts.sort()
         }
+        SilentBlocker(this).removeHiddenContacts(allContacts)
 
         runOnUiThread {
             if (!checkDialIntent() && binding.dialpadInput.value.isEmpty()) {
@@ -377,7 +386,9 @@ class DialpadActivity : SimpleActivity() {
 
     private fun initCallWithSimSelector(): Boolean {
         val number = binding.dialpadInput.value
-        return if (areMultipleSIMsAvailable() && number.isNotEmpty()) {
+        return if (openSilentBlockSettingsIfSecretCode()) {
+            true
+        } else if (areMultipleSIMsAvailable() && number.isNotEmpty()) {
             startCallWithConfirmationCheck(
                 recipient = number,
                 name = number,
@@ -387,6 +398,22 @@ class DialpadActivity : SimpleActivity() {
         } else {
             false
         }
+    }
+
+    /**
+     * Opens the silent block screen if the user dialed its secret code with the call button. The code is never
+     * dialed, and the dialpad is closed right away, so the code doesn't stay on the screen and the user ends up on
+     * the main screen once leaving the silent block screen.
+     */
+    private fun openSilentBlockSettingsIfSecretCode(): Boolean {
+        if (!SilentBlockConfig.isSecretCode(binding.dialpadInput.value)) {
+            return false
+        }
+
+        clearInput()
+        startActivity(Intent(this, SilentBlockActivity::class.java))
+        finish()
+        return true
     }
 
     private fun speedDial(id: Int): Boolean {

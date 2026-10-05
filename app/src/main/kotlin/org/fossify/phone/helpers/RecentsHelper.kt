@@ -25,6 +25,9 @@ class RecentsHelper(private val context: Context) {
     private val contentUri = Calls.CONTENT_URI
     private var queryLimit = QUERY_LIMIT
 
+    @Volatile
+    private var silentlyBlockedCallsFilter: (String, Boolean, Int, Long) -> Boolean = { _, _, _, _ -> false }
+
     fun getRecentCalls(
         previousRecents: List<RecentCall> = ArrayList(),
         queryLimit: Int = QUERY_LIMIT,
@@ -38,6 +41,9 @@ class RecentsHelper(private val context: Context) {
 
         ContactsHelper(context).getContacts(getAll = true, showOnlyContactsWithNumbers = true) { contacts ->
             ensureBackgroundThread {
+                // leftover rows are filtered out below anyway, the cleanup mustn't delay the call history
+                SilentBlockCallLogCleaner.cleanInBackground(context)
+                silentlyBlockedCallsFilter = SilentBlockCallLogCleaner(context).createCallLogFilter()
                 val privateContacts = MyContactsContentProvider.getContacts(context, privateCursor)
                 if (privateContacts.isNotEmpty()) {
                     contacts.addAll(privateContacts)
@@ -279,9 +285,12 @@ class RecentsHelper(private val context: Context) {
         }
 
         val blockedNumbers = context.getBlockedNumbers()
+        // silently blocked calls only belong to the secret history, even if they couldn't be removed from the log yet
+        val isSilentlyBlocked = silentlyBlockedCallsFilter
 
         return recentCalls
             .filter { !context.isNumberBlocked(it.phoneNumber, blockedNumbers) }
+            .filterNot { isSilentlyBlocked(it.phoneNumber, it.isUnknownNumber, it.type, it.startTS) }
     }
 
     fun removeRecentCalls(ids: List<Int>, callback: () -> Unit) {

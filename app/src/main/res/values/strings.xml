@@ -84,6 +84,47 @@
     <string name="import_call_history">Import call history</string>
     <string name="calling_accounts">Calling accounts</string>
 
+    <!-- Silent block -->
+    <string name="silent_block">Silent block</string>
+    <string name="silent_block_list_tab">Group list</string>
+    <string name="silent_block_history_tab">Silenced calls</string>
+    <string name="silent_block_settings_tab">Options</string>
+    <string name="silent_block_mode">Enable silent block mode</string>
+    <string name="silent_block_unknown_numbers">Also silently block unknown numbers</string>
+    <string name="silent_block_hidden_numbers">Also silently block private and hidden numbers</string>
+    <string name="silent_block_hide_contacts">Hide silently blocked contacts from the contact lists</string>
+    <string name="silent_block_requires_default_dialer">Silent blocking only works while this app is the default phone app. Tap here to make it the default.</string>
+    <string name="silent_block_mode_disabled">Silent block mode is off, nobody is blocked right now.</string>
+    <string name="silent_block_list_hint">Only the checked entries can reach you. Unchecked entries are silently blocked: their calls are not rejected, your phone just stays silent while the caller keeps hearing the ringing tone until the call times out.</string>
+    <string name="silent_block_summary">Active: %1$d • Silently blocked: %2$d</string>
+    <string name="silent_block_list_empty">The list is empty. Tap the + button to add contacts or numbers.</string>
+    <string name="silent_block_history_empty">No calls have been silently blocked yet</string>
+    <string name="silent_block_add">Add to the group list</string>
+    <string name="silent_block_add_contacts">Add contacts</string>
+    <string name="silent_block_add_number">Add a number</string>
+    <string name="silent_block_add_as_active">Mark as active, allowed to call</string>
+    <string name="silent_block_phone_number">Phone number</string>
+    <string name="silent_block_name_optional">Name (optional)</string>
+    <string name="silent_block_invalid_number">Please enter a valid phone number</string>
+    <string name="silent_block_number_already_added">This number is already in the group list</string>
+    <string name="silent_block_all_contacts_added">All your contacts are in the group list already</string>
+    <string name="silent_block_no_contacts_selected">No contacts have been selected</string>
+    <string name="silent_block_status_active">Active, can call you</string>
+    <string name="silent_block_status_blocked">Silently blocked</string>
+    <string name="silent_block_remove_entry_confirmation">Remove \"%s\" from the group list?</string>
+    <string name="silent_block_mark_all_active">Mark all as active</string>
+    <string name="silent_block_mark_all_blocked">Silently block all</string>
+    <string name="silent_block_clear_history">Clear silenced calls</string>
+    <string name="silent_block_clear_history_confirmation">Remove every call from the silenced calls history?</string>
+    <string name="silent_block_reason_group_list">Group list</string>
+    <string name="silent_block_reason_unknown">Unknown number</string>
+    <string name="silent_block_reason_hidden">Private number</string>
+    <string name="silent_block_private_number">Private number</string>
+    <string name="silent_block_allow_caller">Allow this caller</string>
+    <string name="silent_block_caller_allowed">%s can call you now</string>
+    <string name="silent_block_remove_from_history">Remove from history</string>
+    <string name="silent_block_how_it_works">How it works: a silently blocked call is neither rejected nor shown. There is no ringing, no popup, no notification and no call history entry, the call only shows up in the Silenced calls tab here. While such a call is still ringing on the network, usually up to a minute, your line counts as busy: other callers may hear a busy tone and outgoing calls may fail until it ends. Depending on your carrier, the caller may reach your voicemail once the call times out. Dial %s in the dialpad to come back here.</string>
+
     <!-- FAQ -->
     <string name="faq_1_title">I hear incoming calls, but the screen doesn\'t turn on. What can I do?</string>
     <string name="faq_1_text">Such issues can have many device and system specific reasons, hard to say in general. You should look around in your device settings and make sure that the app is allowed to pop up when in background and allow displaying over other apps.</string>

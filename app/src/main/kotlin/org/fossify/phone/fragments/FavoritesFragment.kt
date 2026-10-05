@@ -31,6 +31,7 @@ import org.fossify.phone.extensions.config
 import org.fossify.phone.extensions.handleGenericContactClick
 import org.fossify.phone.extensions.setupWithContacts
 import org.fossify.phone.extensions.startContactDetailsIntent
+import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.interfaces.RefreshItemsListener
 
 class FavoritesFragment(context: Context, attributeSet: AttributeSet) : MyViewPagerFragment<MyViewPagerFragment.LettersInnerBinding>(context, attributeSet),
@@ -83,6 +84,7 @@ class FavoritesFragment(context: Context, attributeSet: AttributeSet) : MyViewPa
                 }
             }
             val favorites = contacts.filter { it.starred == 1 } as ArrayList<Contact>
+            SilentBlocker(context).removeHiddenContacts(favorites)
 
             allContacts = if (activity!!.config.isCustomOrderSelected) {
                 sortByCustomOrder(favorites)

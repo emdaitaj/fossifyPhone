@@ -92,6 +92,13 @@
             android:label="@string/speed_dial"
             android:parentActivityName=".activities.SettingsActivity" />
 
+        <!-- secret screen, only reachable by dialing the silent block code in the app's own dialpad -->
+        <activity
+            android:name=".activities.SilentBlockActivity"
+            android:configChanges="orientation"
+            android:exported="false"
+            android:label="@string/silent_block" />
+
         <activity
             android:name=".activities.ConferenceActivity"
             android:configChanges="orientation"
@@ -190,6 +197,11 @@
                 <action android:name="android.telecom.CallScreeningService" />
             </intent-filter>
         </service>
+
+        <service
+            android:name=".services.SilentBlockCleanupJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
 
         <receiver
             android:name=".receivers.CallActionReceiver"
