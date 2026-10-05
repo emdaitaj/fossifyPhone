@@ -1,7 +1,6 @@
 package org.fossify.phone.helpers
 
 import android.app.Activity
-import android.database.SQLException
 import org.fossify.commons.extensions.showErrorToast
 import java.util.concurrent.Executors
 
@@ -16,17 +15,25 @@ object SilentBlockExecutor {
     }
 
     fun execute(action: () -> Unit) {
-        executor.execute(action)
+        executor.execute {
+            try {
+                action()
+            } catch (_: Exception) {
+                // a failing task must never take the app down, the callers report their errors themselves
+            }
+        }
     }
 
     /**
-     * Runs [action] in order with other storage work, reports storage errors and then calls [onDone] on the UI thread.
+     * Runs [action] in order with other storage work, reports any error and then calls [onDone] on the UI thread.
      */
+    @Suppress("TooGenericExceptionCaught")
     fun runUpdate(activity: Activity, action: () -> Unit, onDone: () -> Unit) {
         execute {
             try {
                 action()
-            } catch (e: SQLException) {
+            } catch (e: Exception) {
+                // e.g. storage errors or a contacts permission revoked meanwhile
                 activity.showErrorToast(e)
             }
 

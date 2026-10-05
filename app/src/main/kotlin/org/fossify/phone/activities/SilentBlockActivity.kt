@@ -1,6 +1,5 @@
 package org.fossify.phone.activities
 
-import android.database.SQLException
 import android.os.Bundle
 import android.view.WindowManager
 import com.google.android.material.tabs.TabLayout
@@ -148,6 +147,7 @@ class SilentBlockActivity : SimpleActivity() {
     }
 
     // queued behind pending changes, so it always shows their outcome
+    @Suppress("TooGenericExceptionCaught")
     private fun refreshData() {
         SilentBlockExecutor.execute {
             try {
@@ -160,7 +160,7 @@ class SilentBlockActivity : SimpleActivity() {
                         refreshMenuItems()
                     }
                 }
-            } catch (e: SQLException) {
+            } catch (e: Exception) {
                 showErrorToast(e)
             }
         }

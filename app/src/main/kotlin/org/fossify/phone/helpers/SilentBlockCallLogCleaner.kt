@@ -205,6 +205,12 @@ class SilentBlockCallLogCleaner(context: Context) {
             }
         }
 
+        /** Runs a single cleanup in the background, e.g. when the call history gets loaded. */
+        fun cleanInBackground(context: Context) {
+            val appContext = context.applicationContext
+            cleanupHandler.post { cleanSafely(appContext, cancelMissedCallNotification = false) }
+        }
+
         private fun cleanSafely(context: Context, cancelMissedCallNotification: Boolean) {
             try {
                 SilentBlockCallLogCleaner(context).cleanCallLog()

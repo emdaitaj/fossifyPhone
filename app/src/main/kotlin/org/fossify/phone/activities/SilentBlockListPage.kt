@@ -1,6 +1,5 @@
 package org.fossify.phone.activities
 
-import android.database.SQLException
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.phone.R
@@ -78,7 +77,7 @@ class SilentBlockListPage(
                         repository.updateContactDetails(updatedEntries)
                         activity.runOnUiThread { onDataChanged() }
                     }
-                } catch (_: SQLException) {
+                } catch (_: Exception) {
                     // the entries keep their previous details, their stored numbers are still matched
                 }
             }

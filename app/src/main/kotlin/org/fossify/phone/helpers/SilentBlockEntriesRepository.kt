@@ -25,7 +25,8 @@ import org.fossify.phone.models.SilentBlockEntry
 
 /**
  * Access to the silent block group list. The list is read on every incoming call and every contact list refresh,
- * so it is cached in memory and the cache is invalidated on every write. Use it from a background thread only.
+ * so it is cached in memory and the cache is invalidated on every write. Writes and the first read access the
+ * database, use [preload] for loading the list in the background before the contact lists need it.
  */
 class SilentBlockEntriesRepository(context: Context) {
     private val database = SilentBlockDatabase.getInstance(context)
@@ -151,6 +152,12 @@ class SilentBlockEntriesRepository(context: Context) {
 
     companion object {
         private const val MAX_SQL_ARGS = 500
+
+        /** Loads the group list into the memory cache in the background. */
+        fun preload(context: Context) {
+            val appContext = context.applicationContext
+            SilentBlockExecutor.execute { SilentBlockEntriesRepository(appContext).getEntries() }
+        }
         private val lock = Any()
         private val numbersSerializer = ListSerializer(String.serializer())
 

@@ -40,13 +40,27 @@ class CallService : InCallService() {
         }
     }
 
+    // a silenced call answered anyway, e.g. with a headset button, must not stay invisible
+    private val silencedCallListener = object : Call.Callback() {
+        override fun onStateChanged(call: Call, state: Int) {
+            if (state == Call.STATE_ACTIVE && silencedCalls.remove(call)) {
+                call.unregisterCallback(this)
+                SilentBlockRegistry.remove(call.details)
+                showCall(call)
+            }
+        }
+    }
+
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         if (isSilentlyBlocked(call)) {
             silenceCall(call)
-            return
+        } else {
+            showCall(call)
         }
+    }
 
+    private fun showCall(call: Call) {
         CallManager.onCallAdded(call)
         CallManager.inCallService = this
         call.registerCallback(callListener)
@@ -82,6 +96,7 @@ class CallService : InCallService() {
     override fun onCallRemoved(call: Call) {
         super.onCallRemoved(call)
         if (silencedCalls.remove(call)) {
+            call.unregisterCallback(silencedCallListener)
             SilentBlockRegistry.remove(call.details)
             // the system treated the call as a regular one, so it also wrote it into the call log as a missed call
             SilentBlockCallLogCleaner.scheduleCleanup(this, cancelMissedCallNotification = true)
@@ -135,6 +150,7 @@ class CallService : InCallService() {
      */
     private fun silenceCall(call: Call) {
         silencedCalls.add(call)
+        call.registerCallback(silencedCallListener)
         silenceRinger()
 
         // the ringer might not have started yet when the call is added, make sure it gets silenced as well

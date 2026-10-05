@@ -60,6 +60,7 @@ import org.fossify.phone.extensions.startContactDetailsIntent
 import org.fossify.phone.helpers.DIALPAD_TONE_LENGTH_MS
 import org.fossify.phone.helpers.RecentsHelper
 import org.fossify.phone.helpers.SilentBlockConfig
+import org.fossify.phone.helpers.SilentBlockEntriesRepository
 import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.helpers.ToneGeneratorHelper
 import org.fossify.phone.models.SpeedDial
@@ -95,6 +96,7 @@ class DialpadActivity : SimpleActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(binding.root)
+        SilentBlockEntriesRepository.preload(this)
         hasRussianLocale = Locale.getDefault().language == "ru"
 
         binding.apply {
