@@ -88,6 +88,7 @@
     <string name="silent_block">Silent block</string>
     <string name="silent_block_list_tab">Group list</string>
     <string name="silent_block_history_tab">Silenced calls</string>
+    <string name="silent_block_settings_tab">Options</string>
     <string name="silent_block_mode">Enable silent block mode</string>
     <string name="silent_block_unknown_numbers">Also silently block unknown numbers</string>
     <string name="silent_block_hidden_numbers">Also silently block private and hidden numbers</string>

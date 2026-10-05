@@ -14,11 +14,11 @@ import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.updateTextColors
 import org.fossify.commons.extensions.viewBinding
 import org.fossify.commons.helpers.NavigationIcon
-import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.phone.R
 import org.fossify.phone.databinding.ActivitySilentBlockBinding
 import org.fossify.phone.helpers.SILENT_BLOCK_SECRET_CODE
 import org.fossify.phone.helpers.SilentBlockEntriesRepository
+import org.fossify.phone.helpers.SilentBlockExecutor
 import org.fossify.phone.helpers.SilentBlockHistoryRepository
 
 /**
@@ -32,6 +32,7 @@ class SilentBlockActivity : SimpleActivity() {
     private val binding by viewBinding(ActivitySilentBlockBinding::inflate)
     private lateinit var listPage: SilentBlockListPage
     private lateinit var historyPage: SilentBlockHistoryPage
+    private lateinit var settingsPage: SilentBlockSettingsPage
     private var isAwaitingResult = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,16 +40,20 @@ class SilentBlockActivity : SimpleActivity() {
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         setContentView(binding.root)
         setupEdgeToEdge(
-            padBottomSystem = listOf(binding.silentBlockListPage, binding.silentBlockHistoryList),
+            padBottomSystem = listOf(
+                binding.silentBlockEntriesList,
+                binding.silentBlockHistoryList,
+                binding.silentBlockSettingsPage
+            ),
             moveBottomSystem = listOf(binding.silentBlockFab)
         )
 
         listPage = SilentBlockListPage(this, binding, ::refreshData)
         historyPage = SilentBlockHistoryPage(this, binding, ::refreshData)
+        settingsPage = SilentBlockSettingsPage(this, binding, ::refreshData)
 
         setupOptionsMenu()
         setupTabs(savedInstanceState?.getInt(SELECTED_TAB) ?: LIST_TAB)
-        binding.silentBlockHowItWorks.text = getString(R.string.silent_block_how_it_works, SILENT_BLOCK_SECRET_CODE)
         binding.silentBlockDefaultDialerWarning.setOnClickListener {
             isAwaitingResult = true
             launchSetDefaultDialerIntent()
@@ -70,7 +75,6 @@ class SilentBlockActivity : SimpleActivity() {
             silentBlockTabs.setBackgroundColor(getProperBackgroundColor())
             silentBlockTabs.setTabTextColors(textColor, primaryColor)
             silentBlockTabs.setSelectedTabIndicatorColor(primaryColor)
-            silentBlockListLabel.setTextColor(primaryColor)
             silentBlockDefaultDialerWarning.setTextColor(primaryColor)
             // also refreshed when coming back from the default phone app request
             silentBlockDefaultDialerWarning.beVisibleIf(!isDefaultDialer())
@@ -115,6 +119,7 @@ class SilentBlockActivity : SimpleActivity() {
         binding.silentBlockTabs.apply {
             addTab(newTab().setText(R.string.silent_block_list_tab))
             addTab(newTab().setText(R.string.silent_block_history_tab))
+            addTab(newTab().setText(R.string.silent_block_settings_tab))
             onTabSelectionChanged(tabSelectedAction = { showTab(it) })
             getTabAt(selectedTab)?.select()
             showTab(getTabAt(selectedTabPosition))
@@ -122,23 +127,29 @@ class SilentBlockActivity : SimpleActivity() {
     }
 
     private fun showTab(tab: TabLayout.Tab?) {
-        val isListTab = (tab?.position ?: LIST_TAB) == LIST_TAB
+        val position = tab?.position ?: LIST_TAB
         binding.apply {
-            silentBlockListPage.beVisibleIf(isListTab)
-            silentBlockHistoryPage.beVisibleIf(!isListTab)
-            if (isListTab) {
+            silentBlockListPage.beVisibleIf(position == LIST_TAB)
+            silentBlockHistoryPage.beVisibleIf(position == HISTORY_TAB)
+            silentBlockSettingsPage.beVisibleIf(position == SETTINGS_TAB)
+            when (position) {
+                LIST_TAB -> setupMaterialScrollListener(silentBlockEntriesList, silentBlockAppbar)
+                HISTORY_TAB -> setupMaterialScrollListener(silentBlockHistoryList, silentBlockAppbar)
+                else -> setupMaterialScrollListener(silentBlockSettingsPage, silentBlockAppbar)
+            }
+
+            if (position == LIST_TAB) {
                 silentBlockFab.show()
-                setupMaterialScrollListener(silentBlockListPage, silentBlockAppbar)
             } else {
                 silentBlockFab.hide()
-                setupMaterialScrollListener(silentBlockHistoryList, silentBlockAppbar)
             }
         }
         refreshMenuItems()
     }
 
+    // queued behind pending changes, so it always shows their outcome
     private fun refreshData() {
-        ensureBackgroundThread {
+        SilentBlockExecutor.execute {
             try {
                 val entries = SilentBlockEntriesRepository(this).getEntries()
                 val calls = SilentBlockHistoryRepository(this).getCalls()
@@ -158,5 +169,7 @@ class SilentBlockActivity : SimpleActivity() {
     companion object {
         private const val SELECTED_TAB = "selected_tab"
         private const val LIST_TAB = 0
+        private const val HISTORY_TAB = 1
+        private const val SETTINGS_TAB = 2
     }
 }

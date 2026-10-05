@@ -1,6 +1,5 @@
 package org.fossify.phone.activities
 
-import android.database.SQLException
 import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.Menu
@@ -10,14 +9,13 @@ import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.beVisibleIf
 import org.fossify.commons.extensions.copyToClipboard
 import org.fossify.commons.extensions.getPopupMenuTheme
-import org.fossify.commons.extensions.showErrorToast
 import org.fossify.commons.extensions.toast
-import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.phone.R
 import org.fossify.phone.adapters.SilentBlockHistoryAdapter
 import org.fossify.phone.databinding.ActivitySilentBlockBinding
 import org.fossify.phone.extensions.startCallWithConfirmationCheck
 import org.fossify.phone.helpers.SilentBlockEntriesRepository
+import org.fossify.phone.helpers.SilentBlockExecutor
 import org.fossify.phone.helpers.SilentBlockHistoryRepository
 import org.fossify.phone.helpers.SilentBlockNumberMatcher
 import org.fossify.phone.models.SilentBlockEntry
@@ -101,15 +99,7 @@ class SilentBlockHistoryPage(
     }
 
     private fun runUpdate(action: () -> Unit) {
-        ensureBackgroundThread {
-            try {
-                action()
-            } catch (e: SQLException) {
-                activity.showErrorToast(e)
-            }
-
-            activity.runOnUiThread { onDataChanged() }
-        }
+        SilentBlockExecutor.runUpdate(activity, action, onDataChanged)
     }
 
     companion object {

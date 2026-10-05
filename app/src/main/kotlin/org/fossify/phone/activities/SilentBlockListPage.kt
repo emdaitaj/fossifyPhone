@@ -1,12 +1,8 @@
 package org.fossify.phone.activities
 
 import android.database.SQLException
-import android.view.View
 import org.fossify.commons.dialogs.ConfirmationDialog
 import org.fossify.commons.extensions.beVisibleIf
-import org.fossify.commons.extensions.showErrorToast
-import org.fossify.commons.helpers.ensureBackgroundThread
-import org.fossify.commons.views.MyMaterialSwitch
 import org.fossify.phone.R
 import org.fossify.phone.adapters.SilentBlockEntriesAdapter
 import org.fossify.phone.databinding.ActivitySilentBlockBinding
@@ -14,11 +10,11 @@ import org.fossify.phone.dialogs.AddSilentBlockEntriesDialog
 import org.fossify.phone.helpers.SilentBlockConfig
 import org.fossify.phone.helpers.SilentBlockContactsHelper
 import org.fossify.phone.helpers.SilentBlockEntriesRepository
+import org.fossify.phone.helpers.SilentBlockExecutor
 import org.fossify.phone.models.SilentBlockEntry
 
 /**
- * The group list page of the silent block screen: the silent block options plus adding, removing and
- * (de)activating group list entries.
+ * The group list page of the silent block screen: adding, removing and (de)activating group list entries.
  */
 class SilentBlockListPage(
     private val activity: SimpleActivity,
@@ -39,20 +35,32 @@ class SilentBlockListPage(
                 runUpdate { repository.addEntries(newEntries) }
             }
         }
+    }
 
+    fun showEntries(newEntries: List<SilentBlockEntry>) {
+        entries = newEntries
+        adapter.submitList(newEntries)
+
+        val activeCount = newEntries.count { it.isActive }
+        val counts = activity.getString(R.string.silent_block_summary, activeCount, newEntries.size - activeCount)
+        val modeDisabled = activity.getString(R.string.silent_block_mode_disabled)
         binding.apply {
-            setupSwitch(silentBlockEnabledHolder, silentBlockEnabled, config.isEnabled) { config.isEnabled = it }
-            setupSwitch(silentBlockUnknownHolder, silentBlockUnknown, config.blockUnknownNumbers) {
-                config.blockUnknownNumbers = it
+            silentBlockListSummary.text = when {
+                config.isEnabled -> counts
+                newEntries.isEmpty() -> modeDisabled
+                else -> "$modeDisabled\n$counts"
             }
-            setupSwitch(silentBlockHiddenHolder, silentBlockHidden, config.blockHiddenNumbers) {
-                config.blockHiddenNumbers = it
-            }
-            setupSwitch(silentBlockHideContactsHolder, silentBlockHideContacts, config.hideBlockedContacts) {
-                config.hideBlockedContacts = it
-            }
+            silentBlockListSummary.beVisibleIf(newEntries.isNotEmpty() || !config.isEnabled)
+            silentBlockEntriesPlaceholder.beVisibleIf(newEntries.isEmpty())
         }
-        updateSettingsState()
+    }
+
+    fun setAllActive(isActive: Boolean) {
+        val ids = entries.filter { it.isActive != isActive }.map { it.id }
+        if (ids.isNotEmpty()) {
+            showEntries(entries.map { it.copy(isActive = isActive) })
+            runUpdate { repository.setActive(ids, isActive) }
+        }
     }
 
     /** Keeps names and numbers of contact entries up to date, e.g. after a contact got renamed or a new number. */
@@ -63,39 +71,17 @@ class SilentBlockListPage(
                 return@getAllContacts
             }
 
-            try {
-                val updatedEntries = contactsHelper.getUpdatedEntries(repository.getEntries(), contacts)
-                if (updatedEntries.isNotEmpty()) {
-                    repository.updateContactDetails(updatedEntries)
-                    activity.runOnUiThread { onDataChanged() }
+            SilentBlockExecutor.execute {
+                try {
+                    val updatedEntries = contactsHelper.getUpdatedEntries(repository.getEntries(), contacts)
+                    if (updatedEntries.isNotEmpty()) {
+                        repository.updateContactDetails(updatedEntries)
+                        activity.runOnUiThread { onDataChanged() }
+                    }
+                } catch (_: SQLException) {
+                    // the entries keep their previous details, their stored numbers are still matched
                 }
-            } catch (_: SQLException) {
-                // the entries keep their previous details, their stored numbers are still matched
             }
-        }
-    }
-
-    fun showEntries(newEntries: List<SilentBlockEntry>) {
-        entries = newEntries
-        adapter.submitList(newEntries)
-
-        val activeCount = newEntries.count { it.isActive }
-        binding.apply {
-            silentBlockListSummary.text = activity.getString(
-                R.string.silent_block_summary,
-                activeCount,
-                newEntries.size - activeCount
-            )
-            silentBlockListSummary.beVisibleIf(newEntries.isNotEmpty())
-            silentBlockEntriesPlaceholder.beVisibleIf(newEntries.isEmpty())
-        }
-    }
-
-    fun setAllActive(isActive: Boolean) {
-        val ids = entries.filter { it.isActive != isActive }.map { it.id }
-        if (ids.isNotEmpty()) {
-            showEntries(entries.map { it.copy(isActive = isActive) })
-            runUpdate { repository.setActive(ids, isActive) }
         }
     }
 
@@ -114,41 +100,7 @@ class SilentBlockListPage(
         }
     }
 
-    private fun setupSwitch(holder: View, switch: MyMaterialSwitch, isChecked: Boolean, onChanged: (Boolean) -> Unit) {
-        switch.isChecked = isChecked
-        holder.setOnClickListener {
-            switch.toggle()
-            onChanged(switch.isChecked)
-            updateSettingsState()
-        }
-    }
-
-    // the other options only matter while silent block mode is enabled
-    private fun updateSettingsState() {
-        val isEnabled = config.isEnabled
-        binding.apply {
-            arrayOf(silentBlockUnknownHolder, silentBlockHiddenHolder, silentBlockHideContactsHolder).forEach {
-                it.alpha = if (isEnabled) 1f else DISABLED_ALPHA
-            }
-            silentBlockListHint.setText(
-                if (isEnabled) R.string.silent_block_list_hint else R.string.silent_block_mode_disabled
-            )
-        }
-    }
-
     private fun runUpdate(action: () -> Unit) {
-        ensureBackgroundThread {
-            try {
-                action()
-            } catch (e: SQLException) {
-                activity.showErrorToast(e)
-            }
-
-            activity.runOnUiThread { onDataChanged() }
-        }
-    }
-
-    companion object {
-        private const val DISABLED_ALPHA = 0.5f
+        SilentBlockExecutor.runUpdate(activity, action, onDataChanged)
     }
 }
