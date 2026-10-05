@@ -48,14 +48,24 @@ class SilentBlockEntriesRepository(context: Context) {
         }
     }
 
-    fun updateEntries(entries: List<SilentBlockEntry>) {
+    /**
+     * Stores refreshed contact details of the given entries. The active state is left untouched on purpose,
+     * so a contact sync running in the background can never revert the user toggling an entry meanwhile.
+     */
+    fun updateContactDetails(entries: List<SilentBlockEntry>) {
         if (entries.isEmpty()) {
             return
         }
 
         write {
             entries.forEach { entry ->
-                update(TABLE_ENTRIES, entry.toContentValues(), "$COL_ID = ?", arrayOf(entry.id.toString()))
+                val values = ContentValues().apply {
+                    put(COL_CONTACT_ID, entry.contactId)
+                    put(COL_LOOKUP_KEY, entry.lookupKey)
+                    put(COL_NAME, entry.name)
+                    put(COL_NUMBERS, encodeNumbers(entry.numbers))
+                }
+                update(TABLE_ENTRIES, values, "$COL_ID = ?", arrayOf(entry.id.toString()))
             }
         }
     }
@@ -130,17 +140,9 @@ class SilentBlockEntriesRepository(context: Context) {
         put(COL_CONTACT_ID, contactId)
         put(COL_LOOKUP_KEY, lookupKey)
         put(COL_NAME, name)
-        put(COL_NUMBERS, Json.encodeToString(numbersSerializer, numbers.distinct()))
+        put(COL_NUMBERS, encodeNumbers(numbers))
         put(COL_IS_ACTIVE, if (isActive) 1 else 0)
         put(COL_CREATED_AT, createdAt)
-    }
-
-    private fun decodeNumbers(json: String): List<String> {
-        return try {
-            Json.decodeFromString(numbersSerializer, json)
-        } catch (_: Exception) {
-            emptyList()
-        }
     }
 
     companion object {
@@ -150,5 +152,17 @@ class SilentBlockEntriesRepository(context: Context) {
 
         @Volatile
         private var cachedEntries: List<SilentBlockEntry>? = null
+
+        private fun encodeNumbers(numbers: List<String>): String {
+            return Json.encodeToString(numbersSerializer, numbers.distinct())
+        }
+
+        private fun decodeNumbers(json: String): List<String> {
+            return try {
+                Json.decodeFromString(numbersSerializer, json)
+            } catch (_: Exception) {
+                emptyList()
+            }
+        }
     }
 }

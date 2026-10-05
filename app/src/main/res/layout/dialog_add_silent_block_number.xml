@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/add_silent_block_number_holder"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/activity_margin">
+
+    <org.fossify.commons.views.MyTextInputLayout
+        android:id="@+id/add_silent_block_number_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/silent_block_phone_number">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/add_silent_block_number"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/activity_margin"
+            android:inputType="phone"
+            android:singleLine="true"
+            android:textCursorDrawable="@null"
+            android:textDirection="ltr"
+            android:textSize="@dimen/normal_text_size" />
+
+    </org.fossify.commons.views.MyTextInputLayout>
+
+    <org.fossify.commons.views.MyTextInputLayout
+        android:id="@+id/add_silent_block_name_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/silent_block_name_optional">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/add_silent_block_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="@dimen/activity_margin"
+            android:inputType="textPersonName|textCapWords"
+            android:singleLine="true"
+            android:textCursorDrawable="@null"
+            android:textSize="@dimen/normal_text_size" />
+
+    </org.fossify.commons.views.MyTextInputLayout>
+
+    <org.fossify.commons.views.MyAppCompatCheckbox
+        android:id="@+id/add_silent_block_number_active"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/silent_block_add_as_active"
+        android:textSize="@dimen/normal_text_size" />
+
+</LinearLayout>
