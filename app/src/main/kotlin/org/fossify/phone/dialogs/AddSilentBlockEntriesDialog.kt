@@ -61,9 +61,8 @@ class AddSilentBlockEntriesDialog(
     }
 
     private fun isAlreadyAdded(contact: Contact): Boolean {
-        return existingEntries.any { entry ->
-            entry.isContact && entry.contactId == contact.contactId && entry.isSystemContact != contact.isPrivate()
-        }
+        val contactKey = SilentBlockEntry.getContactKey(contact)
+        return existingEntries.any { it.isContact && it.contactKey == contactKey }
     }
 
     companion object {

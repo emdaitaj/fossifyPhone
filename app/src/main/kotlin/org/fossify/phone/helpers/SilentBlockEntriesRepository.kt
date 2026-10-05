@@ -16,6 +16,7 @@ import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_CONTACT_ID
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_CREATED_AT
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_ID
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_IS_ACTIVE
+import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_IS_PRIVATE_CONTACT
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_LOOKUP_KEY
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_NAME
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_NUMBERS
@@ -62,6 +63,7 @@ class SilentBlockEntriesRepository(context: Context) {
                 val values = ContentValues().apply {
                     put(COL_CONTACT_ID, entry.contactId)
                     put(COL_LOOKUP_KEY, entry.lookupKey)
+                    put(COL_IS_PRIVATE_CONTACT, if (entry.isPrivateContact) 1 else 0)
                     put(COL_NAME, entry.name)
                     put(COL_NUMBERS, encodeNumbers(entry.numbers))
                 }
@@ -130,6 +132,7 @@ class SilentBlockEntriesRepository(context: Context) {
         id = getLongValue(COL_ID),
         contactId = getIntValue(COL_CONTACT_ID),
         lookupKey = getStringValue(COL_LOOKUP_KEY).orEmpty(),
+        isPrivateContact = getIntValue(COL_IS_PRIVATE_CONTACT) == 1,
         name = getStringValue(COL_NAME).orEmpty(),
         numbers = decodeNumbers(getStringValue(COL_NUMBERS).orEmpty()),
         isActive = getIntValue(COL_IS_ACTIVE) == 1,
@@ -139,6 +142,7 @@ class SilentBlockEntriesRepository(context: Context) {
     private fun SilentBlockEntry.toContentValues() = ContentValues().apply {
         put(COL_CONTACT_ID, contactId)
         put(COL_LOOKUP_KEY, lookupKey)
+        put(COL_IS_PRIVATE_CONTACT, if (isPrivateContact) 1 else 0)
         put(COL_NAME, name)
         put(COL_NUMBERS, encodeNumbers(numbers))
         put(COL_IS_ACTIVE, if (isActive) 1 else 0)

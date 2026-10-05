@@ -8,9 +8,8 @@ import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getMyContactsCursor
 import org.fossify.commons.extensions.getStringValue
 import org.fossify.commons.extensions.hasPermission
-import org.fossify.commons.helpers.ContactLookupResult
+import org.fossify.commons.helpers.MyContactsContentProvider
 import org.fossify.commons.helpers.PERMISSION_READ_CONTACTS
-import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.models.contacts.Contact
 import org.fossify.phone.models.SilentBlockEntry
 import org.fossify.phone.models.SilentBlockReason
@@ -34,39 +33,41 @@ class SilentBlocker(context: Context) {
     private val matcher = SilentBlockNumberMatcher(appContext)
 
     /**
-     * Returns the reason for silently blocking an incoming call, or null if the call should go through.
+     * Decides how an incoming call is handled.
      *
      * @param number the caller's number, null or empty for hidden callers
      * @param presentation one of the TelecomManager.PRESENTATION_* constants
      */
-    fun evaluateIncomingCall(number: String?, presentation: Int): SilentBlockMatch? {
+    fun evaluateIncomingCall(number: String?, presentation: Int): SilentBlockDecision {
         if (!config.isEnabled) {
-            return null
+            return SilentBlockDecision.NotHandled
         }
 
         val isAllowedPresentation = presentation == TelecomManager.PRESENTATION_ALLOWED
         if (!isAllowedPresentation || number == null || SilentBlockNumberMatcher.isHiddenNumber(number)) {
-            return if (config.blockHiddenNumbers) SilentBlockMatch(SilentBlockReason.HIDDEN_NUMBER) else null
+            return if (config.blockHiddenNumbers) {
+                SilentBlockDecision.Block(SilentBlockReason.HIDDEN_NUMBER)
+            } else {
+                SilentBlockDecision.NotHandled
+            }
         }
 
         val contacts = lookupSystemContacts(number)
-        val matchingEntries = EntryIndex(entriesRepository.getEntries()).findEntries(number, contacts)
+        val matchingEntries = EntryIndex(entriesRepository.getEntries()).findEntries(number, contacts.orEmpty())
         return when {
+            // an entry marked as active always wins, e.g. if a number is both in an active and a blocked entry
+            matchingEntries.any { it.isActive } -> SilentBlockDecision.Allow
             matchingEntries.isNotEmpty() -> {
-                // an entry marked as active always wins, e.g. if a number is both in an active and a blocked entry
-                if (matchingEntries.any { it.isActive }) {
-                    null
-                } else {
-                    val name = contacts.firstOrNull()?.name ?: matchingEntries.first().name
-                    SilentBlockMatch(SilentBlockReason.GROUP_LIST, name)
-                }
+                val name = contacts?.firstOrNull()?.name ?: matchingEntries.first().name
+                SilentBlockDecision.Block(SilentBlockReason.GROUP_LIST, name)
             }
 
-            config.blockUnknownNumbers && contacts.isEmpty() && isUnknownNumber(number) -> {
-                SilentBlockMatch(SilentBlockReason.UNKNOWN_NUMBER)
+            // a failed contacts lookup must never make a saved contact count as unknown
+            config.blockUnknownNumbers && contacts?.isEmpty() == true && !isPrivateContact(number) -> {
+                SilentBlockDecision.Block(SilentBlockReason.UNKNOWN_NUMBER)
             }
 
-            else -> null
+            else -> SilentBlockDecision.NotHandled
         }
     }
 
@@ -74,19 +75,20 @@ class SilentBlocker(context: Context) {
      * Stores the call in the secret history and starts removing it from the system call log. Recording the same
      * call twice, e.g. from the screening service and from the in-call service, results in a single record.
      */
-    fun recordBlockedCall(number: String?, timestamp: Long, match: SilentBlockMatch, phoneAccountId: String) {
+    fun recordBlockedCall(number: String?, timestamp: Long, decision: SilentBlockDecision.Block, phoneAccountId: String) {
+        val isHidden = decision.reason == SilentBlockReason.HIDDEN_NUMBER || SilentBlockNumberMatcher.isHiddenNumber(number)
         val call = SilentBlockedCall(
-            number = if (SilentBlockNumberMatcher.isHiddenNumber(number)) "" else number.orEmpty().trim(),
-            name = match.name,
+            number = if (isHidden) "" else number.orEmpty().trim(),
+            name = decision.name,
             timestamp = timestamp,
-            reason = match.reason,
+            reason = decision.reason,
             phoneAccountId = phoneAccountId
         )
 
         synchronized(recordLock) {
             val isDuplicate = historyRepository
                 .getCallsBetween(timestamp - DUPLICATE_WINDOW_MS, timestamp + DUPLICATE_WINDOW_MS)
-                .any { isSameCaller(it, call) }
+                .any { matcher.isSameCaller(it.number, it.isHiddenNumber, call.number, call.isHiddenNumber) }
 
             if (!isDuplicate) {
                 historyRepository.insertCall(call)
@@ -122,24 +124,17 @@ class SilentBlocker(context: Context) {
         }
     }
 
-    private fun isSameCaller(first: SilentBlockedCall, second: SilentBlockedCall): Boolean {
-        return if (first.isHiddenNumber || second.isHiddenNumber) {
-            first.isHiddenNumber && second.isHiddenNumber
-        } else {
-            matcher.matches(first.number, second.number)
-        }
-    }
-
-    private fun lookupSystemContacts(number: String): List<ContactIdentity> {
+    /** Returns the system contacts with this number, or null if they couldn't be determined. */
+    private fun lookupSystemContacts(number: String): List<ContactIdentity>? {
         if (!appContext.hasPermission(PERMISSION_READ_CONTACTS)) {
-            return emptyList()
+            return null
         }
 
-        val identities = ArrayList<ContactIdentity>()
         val uri = Uri.withAppendedPath(PhoneLookup.CONTENT_FILTER_URI, Uri.encode(number))
         val projection = arrayOf(PhoneLookup.CONTACT_ID, PhoneLookup.LOOKUP_KEY, PhoneLookup.DISPLAY_NAME)
-        try {
+        return try {
             appContext.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                val identities = ArrayList<ContactIdentity>()
                 while (cursor.moveToNext()) {
                     identities.add(
                         ContactIdentity(
@@ -149,20 +144,22 @@ class SilentBlocker(context: Context) {
                         )
                     )
                 }
+                identities
             }
         } catch (_: Exception) {
-            // contacts provider unavailable, fall back to matching the stored numbers only
+            // contacts provider unavailable, only the stored numbers can be matched
+            null
         }
-        return identities
     }
 
-    // also checks private contacts of Fossify Contacts, which are not part of the system contacts
-    private fun isUnknownNumber(number: String): Boolean {
+    // private contacts of Fossify Contacts are not part of the system contacts
+    private fun isPrivateContact(number: String): Boolean {
         val privateCursor = appContext.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         return try {
-            SimpleContactsHelper(appContext).existsSync(number, privateCursor) == ContactLookupResult.NotFound
+            MyContactsContentProvider.getSimpleContacts(appContext, privateCursor).any { it.doesHavePhoneNumber(number) }
         } catch (_: Exception) {
-            false
+            // treat the caller as known, blocking a saved contact by mistake is worse than letting a call through
+            true
         } finally {
             privateCursor?.close()
         }
@@ -170,7 +167,7 @@ class SilentBlocker(context: Context) {
 
     private inner class EntryIndex(entries: List<SilentBlockEntry>) {
         private val entriesByNumberKey = HashMap<String, MutableList<Pair<String, SilentBlockEntry>>>()
-        private val entriesByContact = HashMap<String, MutableList<SilentBlockEntry>>()
+        private val entriesByContact = entries.filter { it.isContact }.groupBy { it.contactKey }
         private val systemContactEntries = entries.filter { it.isSystemContact }
 
         init {
@@ -181,11 +178,6 @@ class SilentBlocker(context: Context) {
                         entriesByNumberKey.getOrPut(key) { mutableListOf() }.add(number to entry)
                     }
                 }
-
-                if (entry.isContact) {
-                    val key = getContactKey(entry.contactId, isPrivate = !entry.isSystemContact)
-                    entriesByContact.getOrPut(key) { mutableListOf() }.add(entry)
-                }
             }
         }
 
@@ -194,7 +186,8 @@ class SilentBlocker(context: Context) {
             contacts.forEach { contact ->
                 result.addAll(
                     systemContactEntries.filter { entry ->
-                        entry.contactId == contact.contactId || entry.lookupKey == contact.lookupKey
+                        entry.contactId == contact.contactId
+                            || (entry.lookupKey.isNotEmpty() && entry.lookupKey == contact.lookupKey)
                     }
                 )
             }
@@ -205,7 +198,7 @@ class SilentBlocker(context: Context) {
 
         fun findEntries(contact: Contact): Set<SilentBlockEntry> {
             val result = LinkedHashSet<SilentBlockEntry>()
-            entriesByContact[getContactKey(contact.contactId, contact.isPrivate())]?.let { result.addAll(it) }
+            entriesByContact[SilentBlockEntry.getContactKey(contact)]?.let { result.addAll(it) }
             contact.phoneNumbers.forEach { phoneNumber ->
                 addEntriesMatchingNumber(phoneNumber.value.ifBlank { phoneNumber.normalizedNumber }, result)
             }
@@ -220,8 +213,6 @@ class SilentBlocker(context: Context) {
                 }
             }
         }
-
-        private fun getContactKey(contactId: Int, isPrivate: Boolean) = "$isPrivate|$contactId"
     }
 
     private data class ContactIdentity(val contactId: Int, val lookupKey: String, val name: String)
@@ -233,4 +224,14 @@ class SilentBlocker(context: Context) {
     }
 }
 
-data class SilentBlockMatch(val reason: SilentBlockReason, val name: String = "")
+/** How silent block handles an incoming call. */
+sealed interface SilentBlockDecision {
+    /** The call is blocked silently. */
+    data class Block(val reason: SilentBlockReason, val name: String = "") : SilentBlockDecision
+
+    /** The caller is an active group list entry, so the call rings even if it would be rejected as unknown. */
+    data object Allow : SilentBlockDecision
+
+    /** Silent block doesn't apply, the regular blocking rules decide. */
+    data object NotHandled : SilentBlockDecision
+}

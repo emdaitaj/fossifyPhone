@@ -39,6 +39,15 @@ class SilentBlockNumberMatcher(context: Context) {
         }
     }
 
+    /** Compares two callers, a hidden caller only matches another hidden caller. */
+    fun isSameCaller(firstNumber: String, isFirstHidden: Boolean, secondNumber: String, isSecondHidden: Boolean): Boolean {
+        return if (isFirstHidden || isSecondHidden) {
+            isFirstHidden && isSecondHidden
+        } else {
+            matches(firstNumber, secondNumber)
+        }
+    }
+
     private fun isSameE164Number(normalizedFirst: String, normalizedSecond: String): Boolean {
         val firstE164 = toE164(normalizedFirst)
         return firstE164 != null && firstE164 == toE164(normalizedSecond)

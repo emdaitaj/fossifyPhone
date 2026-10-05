@@ -11,6 +11,7 @@ import org.fossify.commons.extensions.getProperTextColor
 import org.fossify.commons.models.contacts.Contact
 import org.fossify.phone.activities.SimpleActivity
 import org.fossify.phone.databinding.ItemSilentBlockContactPickBinding
+import org.fossify.phone.models.SilentBlockEntry
 
 /**
  * A searchable multi-select list of contacts, used for adding contacts to the silent block group list.
@@ -30,7 +31,7 @@ class SilentBlockContactPickerAdapter(
         submitList(allContacts)
     }
 
-    fun getSelectedContacts(): List<Contact> = allContacts.filter { getKey(it) in selectedKeys }
+    fun getSelectedContacts(): List<Contact> = allContacts.filter { SilentBlockEntry.getContactKey(it) in selectedKeys }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemSilentBlockContactPickBinding.inflate(LayoutInflater.from(parent.context), parent, false)
@@ -45,7 +46,7 @@ class SilentBlockContactPickerAdapter(
         private val binding: ItemSilentBlockContactPickBinding
     ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(contact: Contact) {
-            val key = getKey(contact)
+            val key = SilentBlockEntry.getContactKey(contact)
             binding.apply {
                 silentBlockPickCheckbox.setColors(textColor, primaryColor, backgroundColor)
                 silentBlockPickCheckbox.isChecked = key in selectedKeys
@@ -66,12 +67,9 @@ class SilentBlockContactPickerAdapter(
     }
 
     private object DiffCallback : DiffUtil.ItemCallback<Contact>() {
-        override fun areItemsTheSame(oldItem: Contact, newItem: Contact) = getKey(oldItem) == getKey(newItem)
+        override fun areItemsTheSame(oldItem: Contact, newItem: Contact) =
+            SilentBlockEntry.getContactKey(oldItem) == SilentBlockEntry.getContactKey(newItem)
 
         override fun areContentsTheSame(oldItem: Contact, newItem: Contact) = oldItem == newItem
-    }
-
-    companion object {
-        private fun getKey(contact: Contact) = "${contact.isPrivate()}|${contact.contactId}"
     }
 }

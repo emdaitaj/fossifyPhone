@@ -48,6 +48,7 @@ class SilentBlockContactsHelper(context: Context) {
             SilentBlockEntry(
                 contactId = contact.contactId,
                 lookupKey = if (contact.isPrivate()) "" else lookupKeys[contact.contactId].orEmpty(),
+                isPrivateContact = contact.isPrivate(),
                 name = contact.getNameToDisplay(),
                 numbers = getNumbers(contact),
                 isActive = isActive
@@ -61,9 +62,9 @@ class SilentBlockContactsHelper(context: Context) {
      * gets removed from the contact. Call it from a background thread.
      */
     fun getUpdatedEntries(entries: List<SilentBlockEntry>, contacts: List<Contact>): List<SilentBlockEntry> {
-        val contactsByKey = contacts.associateBy { getContactKey(it.contactId, it.isPrivate()) }
+        val contactsByKey = contacts.associateBy { SilentBlockEntry.getContactKey(it) }
         val updatedEntries = entries.filter { it.isContact }.mapNotNull { entry ->
-            val contact = contactsByKey[getContactKey(entry.contactId, !entry.isSystemContact)]
+            val contact = contactsByKey[entry.contactKey]
                 ?: findMovedContact(entry, contactsByKey)
                 ?: return@mapNotNull null
 
@@ -95,7 +96,7 @@ class SilentBlockContactsHelper(context: Context) {
     // a person stored in multiple accounts consists of multiple raw contacts sharing the same contact id
     private fun mergeDuplicates(contacts: List<Contact>): List<Contact> {
         return contacts
-            .groupBy { getContactKey(it.contactId, it.isPrivate()) }
+            .groupBy { SilentBlockEntry.getContactKey(it) }
             .values
             .map { group ->
                 if (group.size == 1) {
@@ -110,7 +111,7 @@ class SilentBlockContactsHelper(context: Context) {
     }
 
     private fun findMovedContact(entry: SilentBlockEntry, contactsByKey: Map<String, Contact>): Contact? {
-        if (!entry.isSystemContact) {
+        if (!entry.isSystemContact || entry.lookupKey.isEmpty()) {
             return null
         }
 
@@ -122,7 +123,7 @@ class SilentBlockContactsHelper(context: Context) {
             null
         }
 
-        return newContactId?.let { contactsByKey[getContactKey(it, isPrivate = false)] }
+        return newContactId?.let { contactsByKey[SilentBlockEntry.getContactKey(it, isPrivate = false)] }
     }
 
     private fun getLookupKeys(contactIds: List<Int>): Map<Int, String> {
@@ -163,8 +164,6 @@ class SilentBlockContactsHelper(context: Context) {
             .filter { it.isNotBlank() }
             .distinctBy { SilentBlockNumberMatcher.normalize(it) }
     }
-
-    private fun getContactKey(contactId: Int, isPrivate: Boolean) = "$isPrivate|$contactId"
 
     companion object {
         private const val MAX_SQL_ARGS = 500

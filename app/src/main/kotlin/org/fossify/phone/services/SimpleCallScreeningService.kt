@@ -9,7 +9,7 @@ import org.fossify.commons.helpers.ContactLookupResult
 import org.fossify.commons.helpers.SimpleContactsHelper
 import org.fossify.commons.helpers.ensureBackgroundThread
 import org.fossify.commons.helpers.isQPlus
-import org.fossify.phone.helpers.SilentBlockMatch
+import org.fossify.phone.helpers.SilentBlockDecision
 import org.fossify.phone.helpers.SilentBlockRegistry
 import org.fossify.phone.helpers.SilentBlocker
 
@@ -22,14 +22,24 @@ class SimpleCallScreeningService : CallScreeningService() {
             val isOnBlockList = number != null && isNumberBlocked(number)
 
             // numbers on the regular block list keep being rejected as before
-            val silentBlockMatch = if (isOnBlockList) null else getSilentBlockMatch(callDetails, number)
+            val silentBlockDecision = if (isOnBlockList) {
+                SilentBlockDecision.NotHandled
+            } else {
+                getSilentBlockDecision(callDetails, number)
+            }
+
             when {
-                silentBlockMatch != null -> {
-                    silentlyBlockCall(callDetails, silentBlockMatch)
+                silentBlockDecision is SilentBlockDecision.Block -> {
+                    silentlyBlockCall(callDetails, silentBlockDecision)
                 }
 
                 isOnBlockList -> {
                     respondToCall(callDetails, isBlocked = true)
+                }
+
+                // the user explicitly allowed this caller in the group list, so it isn't treated as unknown
+                silentBlockDecision == SilentBlockDecision.Allow -> {
+                    respondToCall(callDetails, isBlocked = false)
                 }
 
                 number != null && baseConfig.blockUnknownNumbers -> {
@@ -49,16 +59,16 @@ class SimpleCallScreeningService : CallScreeningService() {
         }
     }
 
-    private fun getSilentBlockMatch(callDetails: Call.Details, number: String?): SilentBlockMatch? {
+    private fun getSilentBlockDecision(callDetails: Call.Details, number: String?): SilentBlockDecision {
         if (isQPlus() && callDetails.callDirection != Call.Details.DIRECTION_INCOMING) {
-            return null
+            return SilentBlockDecision.NotHandled
         }
 
         return try {
             SilentBlocker(this).evaluateIncomingCall(number, callDetails.handlePresentation)
         } catch (_: Exception) {
             // never let a storage problem block or lose a call
-            null
+            SilentBlockDecision.NotHandled
         }
     }
 
@@ -67,7 +77,7 @@ class SimpleCallScreeningService : CallScreeningService() {
      * notification, while the network keeps the call alerting, so the caller hears the ringback tone
      * until the call times out naturally.
      */
-    private fun silentlyBlockCall(callDetails: Call.Details, match: SilentBlockMatch) {
+    private fun silentlyBlockCall(callDetails: Call.Details, decision: SilentBlockDecision.Block) {
         SilentBlockRegistry.markSilenced(callDetails)
 
         val response = CallResponse.Builder()
@@ -83,7 +93,7 @@ class SimpleCallScreeningService : CallScreeningService() {
             SilentBlocker(this).recordBlockedCall(
                 number = callDetails.handle?.schemeSpecificPart,
                 timestamp = timestamp,
-                match = match,
+                decision = decision,
                 phoneAccountId = callDetails.accountHandle?.id.orEmpty()
             )
         } catch (_: Exception) {

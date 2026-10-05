@@ -23,6 +23,7 @@ class SilentBlockDatabase private constructor(context: Context) :
                 $COL_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COL_CONTACT_ID INTEGER NOT NULL DEFAULT 0,
                 $COL_LOOKUP_KEY TEXT NOT NULL DEFAULT '',
+                $COL_IS_PRIVATE_CONTACT INTEGER NOT NULL DEFAULT 0,
                 $COL_NAME TEXT NOT NULL DEFAULT '',
                 $COL_NUMBERS TEXT NOT NULL DEFAULT '[]',
                 $COL_IS_ACTIVE INTEGER NOT NULL DEFAULT 0,
@@ -62,6 +63,7 @@ class SilentBlockDatabase private constructor(context: Context) :
         const val COL_ID = "_id"
         const val COL_CONTACT_ID = "contact_id"
         const val COL_LOOKUP_KEY = "lookup_key"
+        const val COL_IS_PRIVATE_CONTACT = "is_private_contact"
         const val COL_NAME = "name"
         const val COL_NUMBERS = "numbers"
         const val COL_IS_ACTIVE = "is_active"
