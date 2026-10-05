@@ -191,6 +191,11 @@
             </intent-filter>
         </service>
 
+        <service
+            android:name=".services.SilentBlockCleanupJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+
         <receiver
             android:name=".receivers.CallActionReceiver"
             android:enabled="true"

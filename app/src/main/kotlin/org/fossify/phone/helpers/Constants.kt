@@ -29,3 +29,10 @@ const val ACCEPT_CALL = PATH + "ACCEPT_CALL"
 const val DECLINE_CALL = PATH + "DECLINE_CALL"
 
 const val DIALPAD_TONE_LENGTH_MS = 150L // The length of DTMF tones in milliseconds
+
+/**
+ * Dialing this exact number from the in-app dialpad opens the hidden silent block screen (the silent block
+ * group list and the history of silently blocked calls) instead of placing a call. Change it here to use a
+ * different secret code. Visual separators (spaces, dashes, dots, parentheses) are ignored when comparing.
+ */
+const val SILENT_BLOCK_SECRET_CODE = "80792691"
