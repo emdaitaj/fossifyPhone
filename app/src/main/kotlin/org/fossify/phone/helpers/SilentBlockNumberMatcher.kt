@@ -40,7 +40,12 @@ class SilentBlockNumberMatcher(context: Context) {
     }
 
     /** Compares two callers, a hidden caller only matches another hidden caller. */
-    fun isSameCaller(firstNumber: String, isFirstHidden: Boolean, secondNumber: String, isSecondHidden: Boolean): Boolean {
+    fun isSameCaller(
+        firstNumber: String,
+        isFirstHidden: Boolean,
+        secondNumber: String,
+        isSecondHidden: Boolean,
+    ): Boolean {
         return if (isFirstHidden || isSecondHidden) {
             isFirstHidden && isSecondHidden
         } else {

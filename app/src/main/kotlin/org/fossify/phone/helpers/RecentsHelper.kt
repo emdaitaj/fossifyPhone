@@ -285,7 +285,7 @@ class RecentsHelper(private val context: Context) {
 
         return recentCalls
             .filter { !context.isNumberBlocked(it.phoneNumber, blockedNumbers) }
-            .filterNot { isSilentlyBlocked(it.phoneNumber, it.isUnknownNumber, it.startTS) }
+            .filterNot { isSilentlyBlocked(it.phoneNumber, it.isUnknownNumber, it.type, it.startTS) }
     }
 
     private fun removeSilentlyBlockedCallsFromCallLog() {

@@ -75,8 +75,14 @@ class SilentBlocker(context: Context) {
      * Stores the call in the secret history and starts removing it from the system call log. Recording the same
      * call twice, e.g. from the screening service and from the in-call service, results in a single record.
      */
-    fun recordBlockedCall(number: String?, timestamp: Long, decision: SilentBlockDecision.Block, phoneAccountId: String) {
-        val isHidden = decision.reason == SilentBlockReason.HIDDEN_NUMBER || SilentBlockNumberMatcher.isHiddenNumber(number)
+    fun recordBlockedCall(
+        number: String?,
+        timestamp: Long,
+        decision: SilentBlockDecision.Block,
+        phoneAccountId: String,
+    ) {
+        val isHidden = decision.reason == SilentBlockReason.HIDDEN_NUMBER
+            || SilentBlockNumberMatcher.isHiddenNumber(number)
         val call = SilentBlockedCall(
             number = if (isHidden) "" else number.orEmpty().trim(),
             name = decision.name,
@@ -156,7 +162,8 @@ class SilentBlocker(context: Context) {
     private fun isPrivateContact(number: String): Boolean {
         val privateCursor = appContext.getMyContactsCursor(favoritesOnly = false, withPhoneNumbersOnly = true)
         return try {
-            MyContactsContentProvider.getSimpleContacts(appContext, privateCursor).any { it.doesHavePhoneNumber(number) }
+            MyContactsContentProvider.getSimpleContacts(appContext, privateCursor)
+                .any { it.doesHavePhoneNumber(number) }
         } catch (_: Exception) {
             // treat the caller as known, blocking a saved contact by mistake is worse than letting a call through
             true

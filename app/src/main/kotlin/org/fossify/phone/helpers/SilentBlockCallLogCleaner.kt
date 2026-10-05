@@ -60,10 +60,10 @@ class SilentBlockCallLogCleaner(context: Context) {
     }
 
     /**
-     * Returns true if the given system call log row belongs to a silently blocked call. Used for keeping such rows
-     * out of the app's call history, in case the cleanup could not remove them yet.
+     * Returns a filter telling whether a system call log row belongs to a silently blocked call. Used for keeping such
+     * rows out of the app's call history, in case the cleanup couldn't remove them yet.
      */
-    fun createCallLogFilter(): (number: String, isHiddenNumber: Boolean, timestamp: Long) -> Boolean {
+    fun createCallLogFilter(): (number: String, isHiddenNumber: Boolean, type: Int, timestamp: Long) -> Boolean {
         val calls = try {
             historyRepository.getCalls().sortedBy { it.timestamp }
         } catch (_: Exception) {
@@ -71,21 +71,39 @@ class SilentBlockCallLogCleaner(context: Context) {
         }
 
         if (calls.isEmpty()) {
-            return { _, _, _ -> false }
+            return { _, _, _, _ -> false }
         }
 
         val timestamps = calls.map { it.timestamp }.toLongArray()
-        return { number, isHiddenNumber, timestamp ->
-            // binarySearch returns (-insertionPoint - 1) when there is no exact match
-            val searchResult = timestamps.binarySearch(timestamp - CALL_LOG_TIME_TOLERANCE_MS)
-            var index = if (searchResult < 0) -searchResult - 1 else searchResult
+        return { number, isHiddenNumber, type, timestamp ->
+            var index = findFirstIndexAtOrAfter(timestamps, timestamp - CALL_LOG_TIME_TOLERANCE_MS)
             var isBlocked = false
-            while (!isBlocked && index < calls.size && timestamps[index] <= timestamp + CALL_LOG_TIME_TOLERANCE_MS) {
-                isBlocked = isSameCaller(calls[index], number, isHiddenNumber)
+            while (type in BLOCKED_CALL_TYPES && !isBlocked && index < calls.size) {
+                if (timestamps[index] > timestamp + CALL_LOG_TIME_TOLERANCE_MS) {
+                    break
+                }
+
+                val call = calls[index]
+                isBlocked = matcher.isSameCaller(call.number, call.isHiddenNumber, number, isHiddenNumber)
                 index++
             }
             isBlocked
         }
+    }
+
+    // unlike binarySearch, this always finds the first of several equal timestamps
+    private fun findFirstIndexAtOrAfter(sortedTimestamps: LongArray, timestamp: Long): Int {
+        var low = 0
+        var high = sortedTimestamps.size
+        while (low < high) {
+            val middle = (low + high) ushr 1
+            if (sortedTimestamps[middle] < timestamp) {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        return low
     }
 
     // the caller checks both call log permissions, they are granted to the default dialer
@@ -106,13 +124,11 @@ class SilentBlockCallLogCleaner(context: Context) {
 
     @SuppressLint("MissingPermission")
     private fun findCallLogRows(call: SilentBlockedCall): List<String> {
-        // outgoing calls are never touched, even if the user called the blocked number back right away
-        val selection = "${Calls.DATE} BETWEEN ? AND ? AND ${Calls.TYPE} != ?"
-        val selectionArgs = arrayOf(
-            (call.timestamp - CALL_LOG_TIME_TOLERANCE_MS).toString(),
-            (call.timestamp + CALL_LOG_TIME_TOLERANCE_MS).toString(),
-            Calls.OUTGOING_TYPE.toString()
-        )
+        // only the row types Telecom writes for a call that never got answered, answered and outgoing calls stay
+        val typePlaceholders = getQuestionMarks(BLOCKED_CALL_TYPES.size)
+        val selection = "${Calls.DATE} BETWEEN ? AND ? AND ${Calls.TYPE} IN ($typePlaceholders)"
+        val timeRange = listOf(call.timestamp - CALL_LOG_TIME_TOLERANCE_MS, call.timestamp + CALL_LOG_TIME_TOLERANCE_MS)
+        val selectionArgs = (timeRange + BLOCKED_CALL_TYPES.map { it.toLong() }).map { it.toString() }.toTypedArray()
         val projection = arrayOf(Calls._ID, Calls.NUMBER, Calls.NUMBER_PRESENTATION)
 
         val ids = ArrayList<String>()
@@ -122,7 +138,7 @@ class SilentBlockCallLogCleaner(context: Context) {
                 val presentation = cursor.getIntValueOrNull(Calls.NUMBER_PRESENTATION) ?: Calls.PRESENTATION_ALLOWED
                 val isHiddenNumber = presentation != Calls.PRESENTATION_ALLOWED
                     || SilentBlockNumberMatcher.isHiddenNumber(number)
-                if (isSameCaller(call, number, isHiddenNumber)) {
+                if (matcher.isSameCaller(call.number, call.isHiddenNumber, number, isHiddenNumber)) {
                     ids.add(cursor.getLongValue(Calls._ID).toString())
                 }
             }
@@ -130,17 +146,15 @@ class SilentBlockCallLogCleaner(context: Context) {
         return ids
     }
 
-    private fun isSameCaller(call: SilentBlockedCall, number: String, isHiddenNumber: Boolean): Boolean {
-        return if (call.isHiddenNumber || isHiddenNumber) {
-            call.isHiddenNumber && isHiddenNumber
-        } else {
-            matcher.matches(call.number, number)
-        }
-    }
-
     companion object {
-        /** The call log uses the creation time of the call, the same value the history stores. */
-        private const val CALL_LOG_TIME_TOLERANCE_MS = 30 * 1000L
+        /**
+         * Telecom logs a call with its creation time, the very same value the history stores. The small tolerance
+         * only covers systems that log a slightly different time, a legitimate call can't happen that close.
+         */
+        private const val CALL_LOG_TIME_TOLERANCE_MS = 5000L
+
+        /** Blocked when the screening verdict was respected, missed or rejected on systems that ignore it. */
+        private val BLOCKED_CALL_TYPES = listOf(Calls.BLOCKED_TYPE, Calls.MISSED_TYPE, Calls.REJECTED_TYPE)
 
         /** Calls are swept repeatedly for this long, a silently blocked call can keep ringing for minutes. */
         private const val SWEEP_WINDOW_MS = 15 * 60 * 1000L
