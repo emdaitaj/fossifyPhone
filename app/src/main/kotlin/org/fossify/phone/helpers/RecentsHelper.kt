@@ -38,6 +38,7 @@ class RecentsHelper(private val context: Context) {
 
         ContactsHelper(context).getContacts(getAll = true, showOnlyContactsWithNumbers = true) { contacts ->
             ensureBackgroundThread {
+                removeSilentlyBlockedCallsFromCallLog()
                 val privateContacts = MyContactsContentProvider.getContacts(context, privateCursor)
                 if (privateContacts.isNotEmpty()) {
                     contacts.addAll(privateContacts)
@@ -279,9 +280,20 @@ class RecentsHelper(private val context: Context) {
         }
 
         val blockedNumbers = context.getBlockedNumbers()
+        // silently blocked calls only belong to the secret history, even if they couldn't be removed from the log yet
+        val isSilentlyBlocked = SilentBlockCallLogCleaner(context).createCallLogFilter()
 
         return recentCalls
             .filter { !context.isNumberBlocked(it.phoneNumber, blockedNumbers) }
+            .filterNot { isSilentlyBlocked(it.phoneNumber, it.isUnknownNumber, it.startTS) }
+    }
+
+    private fun removeSilentlyBlockedCallsFromCallLog() {
+        try {
+            SilentBlockCallLogCleaner(context).cleanCallLog()
+        } catch (_: Exception) {
+            // the rows are filtered out of the call history below anyway
+        }
     }
 
     fun removeRecentCalls(ids: List<Int>, callback: () -> Unit) {

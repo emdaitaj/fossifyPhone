@@ -59,6 +59,8 @@ import org.fossify.phone.extensions.startCallWithConfirmationCheck
 import org.fossify.phone.extensions.startContactDetailsIntent
 import org.fossify.phone.helpers.DIALPAD_TONE_LENGTH_MS
 import org.fossify.phone.helpers.RecentsHelper
+import org.fossify.phone.helpers.SilentBlockConfig
+import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.helpers.ToneGeneratorHelper
 import org.fossify.phone.models.SpeedDial
 import java.util.Locale
@@ -284,6 +286,7 @@ class DialpadActivity : SimpleActivity() {
             allContacts.addAll(privateContacts)
             allContacts.sort()
         }
+        SilentBlocker(this).removeHiddenContacts(allContacts)
 
         runOnUiThread {
             if (!checkDialIntent() && binding.dialpadInput.value.isEmpty()) {
@@ -360,7 +363,9 @@ class DialpadActivity : SimpleActivity() {
     }
 
     private fun initCall(number: String = binding.dialpadInput.value, name: String? = null) {
-        if (number.isNotEmpty()) {
+        if (SilentBlockConfig.isSecretCode(number)) {
+            openSilentBlockSettings()
+        } else if (number.isNotEmpty()) {
             startCallWithConfirmationCheck(number, name ?: number)
             clearInputWithDelay()
         } else {
@@ -377,7 +382,10 @@ class DialpadActivity : SimpleActivity() {
 
     private fun initCallWithSimSelector(): Boolean {
         val number = binding.dialpadInput.value
-        return if (areMultipleSIMsAvailable() && number.isNotEmpty()) {
+        return if (SilentBlockConfig.isSecretCode(number)) {
+            openSilentBlockSettings()
+            true
+        } else if (areMultipleSIMsAvailable() && number.isNotEmpty()) {
             startCallWithConfirmationCheck(
                 recipient = number,
                 name = number,
@@ -387,6 +395,16 @@ class DialpadActivity : SimpleActivity() {
         } else {
             false
         }
+    }
+
+    /**
+     * The secret code is never dialed. The dialpad is closed right away, so the code doesn't stay on the screen
+     * and the user ends up on the main screen once leaving the silent block screen.
+     */
+    private fun openSilentBlockSettings() {
+        clearInput()
+        startActivity(Intent(this, SilentBlockActivity::class.java))
+        finish()
     }
 
     private fun speedDial(id: Int): Boolean {

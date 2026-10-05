@@ -30,6 +30,7 @@ import org.fossify.phone.extensions.handleGenericContactClick
 import org.fossify.phone.extensions.launchCreateNewContactIntent
 import org.fossify.phone.extensions.setupWithContacts
 import org.fossify.phone.extensions.startContactDetailsIntent
+import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.interfaces.RefreshItemsListener
 
 class ContactsFragment(context: Context, attributeSet: AttributeSet) : MyViewPagerFragment<MyViewPagerFragment.LettersInnerBinding>(context, attributeSet),
@@ -97,6 +98,7 @@ class ContactsFragment(context: Context, attributeSet: AttributeSet) : MyViewPag
                     allContacts.sort()
                 }
             }
+            SilentBlocker(context).removeHiddenContacts(allContacts)
             (activity as MainActivity).cacheContacts()
 
             activity?.runOnUiThread {
@@ -188,6 +190,7 @@ class ContactsFragment(context: Context, attributeSet: AttributeSet) : MyViewPag
                 binding.fragmentPlaceholder.text = context.getString(R.string.no_contacts_found)
                 binding.fragmentPlaceholder2.text = context.getString(R.string.create_new_contact)
                 ContactsHelper(context).getContacts(showOnlyContactsWithNumbers = true) { contacts ->
+                    SilentBlocker(context).removeHiddenContacts(contacts)
                     activity?.runOnUiThread {
                         gotContacts(contacts)
                     }
