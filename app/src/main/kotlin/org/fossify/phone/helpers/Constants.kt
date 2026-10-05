@@ -34,5 +34,8 @@ const val DIALPAD_TONE_LENGTH_MS = 150L // The length of DTMF tones in milliseco
  * Dialing this exact number from the in-app dialpad opens the hidden silent block screen (the silent block
  * group list and the history of silently blocked calls) instead of placing a call. Change it here to use a
  * different secret code. Visual separators (spaces, dashes, dots, parentheses) are ignored when comparing.
+ *
+ * Only this exact dialpad input is intercepted. Should the code ever be a real phone number somewhere, that number
+ * can still be called in its international format (e.g. +45 80792691), from contacts or from the call history.
  */
 const val SILENT_BLOCK_SECRET_CODE = "80792691"
