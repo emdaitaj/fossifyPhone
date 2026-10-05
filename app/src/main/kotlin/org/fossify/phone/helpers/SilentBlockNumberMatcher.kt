@@ -4,6 +4,7 @@ import android.content.Context
 import android.telecom.TelecomManager
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
+import com.google.i18n.phonenumbers.PhoneNumberUtil
 import java.util.Locale
 
 /**
@@ -35,8 +36,9 @@ class SilentBlockNumberMatcher(context: Context) {
             normalizedFirst == normalizedSecond -> true
             // numbers can only match if they share the trailing digits, skip the expensive checks otherwise
             comparableKey(normalizedFirst) != comparableKey(normalizedSecond) -> false
+            // national numbers of the current region, e.g. "0912..." and "+98912..." in Iran
             isSameE164Number(normalizedFirst, normalizedSecond) -> true
-            else -> isLooselyEqual(normalizedFirst, normalizedSecond)
+            else -> isLibPhoneNumberMatch(normalizedFirst, normalizedSecond)
         }
     }
 
@@ -59,7 +61,34 @@ class SilentBlockNumberMatcher(context: Context) {
         return firstE164 != null && firstE164 == toE164(normalizedSecond)
     }
 
-    // handles trunk and international prefixes, like "0912..." vs "+98912..." when the region is unknown
+    /**
+     * Also matches a national number with the international one of another region, e.g. while roaming. If one number
+     * is only the end of the other one, that's fine for a trunk prefix ("0912..." vs "912..."), but not for a local
+     * number saved without its area code, "2233 4455" must not match a stranger's "+98 31 2233 4455".
+     */
+    private fun isLibPhoneNumberMatch(normalizedFirst: String, normalizedSecond: String): Boolean {
+        val matchType = try {
+            PhoneNumberUtil.getInstance().isNumberMatch(normalizedFirst, normalizedSecond)
+        } catch (_: Exception) {
+            PhoneNumberUtil.MatchType.NOT_A_NUMBER
+        }
+
+        return when (matchType) {
+            PhoneNumberUtil.MatchType.EXACT_MATCH, PhoneNumberUtil.MatchType.NSN_MATCH -> true
+            PhoneNumberUtil.MatchType.SHORT_NSN_MATCH -> differsByTrunkPrefixOnly(normalizedFirst, normalizedSecond)
+            PhoneNumberUtil.MatchType.NOT_A_NUMBER -> isLooselyEqual(normalizedFirst, normalizedSecond)
+            else -> false
+        }
+    }
+
+    private fun differsByTrunkPrefixOnly(normalizedFirst: String, normalizedSecond: String): Boolean {
+        val (shorter, longer) = listOf(normalizedFirst, normalizedSecond)
+            .map { it.trimStart('+') }
+            .sortedBy { it.length }
+        return longer.length == shorter.length + 1 && longer.startsWith("0") && longer.endsWith(shorter)
+    }
+
+    // the system's caller ID comparison, for strings libphonenumber doesn't consider numbers at all
     @Suppress("DEPRECATION")
     private fun isLooselyEqual(normalizedFirst: String, normalizedSecond: String): Boolean {
         return PhoneNumberUtils.compare(normalizedFirst, normalizedSecond)

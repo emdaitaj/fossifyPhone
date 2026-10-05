@@ -107,6 +107,20 @@ class SilentBlocker(context: Context) {
         SilentBlockCallLogCleaner.scheduleCleanup(appContext)
     }
 
+    /**
+     * Removes the history record of a silently blocked call that got answered after all, e.g. with a headset button
+     * on a system that ignored the screening verdict.
+     */
+    fun forgetBlockedCall(number: String?, isHiddenNumber: Boolean, timestamp: Long) {
+        synchronized(recordLock) {
+            val ids = historyRepository
+                .getCallsBetween(timestamp - DUPLICATE_WINDOW_MS, timestamp + DUPLICATE_WINDOW_MS)
+                .filter { matcher.isSameCaller(it.number, it.isHiddenNumber, number.orEmpty(), isHiddenNumber) }
+                .map { it.id }
+            historyRepository.removeCalls(ids)
+        }
+    }
+
     /** Removes contacts that are silently blocked right now, if hiding them is enabled. */
     fun removeHiddenContacts(contacts: MutableList<Contact>) {
         if (contacts.isEmpty() || !config.isEnabled || !config.hideBlockedContacts) {

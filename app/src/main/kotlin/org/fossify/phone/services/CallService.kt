@@ -20,7 +20,10 @@ import org.fossify.phone.helpers.CallManager
 import org.fossify.phone.helpers.CallNotificationManager
 import org.fossify.phone.helpers.NoCall
 import org.fossify.phone.helpers.SilentBlockCallLogCleaner
+import org.fossify.phone.helpers.SilentBlockExecutor
+import org.fossify.phone.helpers.SilentBlockNumberMatcher
 import org.fossify.phone.helpers.SilentBlockRegistry
+import org.fossify.phone.helpers.SilentBlocker
 import org.fossify.phone.models.Events
 import org.greenrobot.eventbus.EventBus
 
@@ -46,6 +49,7 @@ class CallService : InCallService() {
             if (state == Call.STATE_ACTIVE && silencedCalls.remove(call)) {
                 call.unregisterCallback(this)
                 SilentBlockRegistry.remove(call.details)
+                forgetBlockedCall(call.details)
                 showCall(call)
             }
         }
@@ -160,6 +164,17 @@ class CallService : InCallService() {
                     silenceRinger()
                 }
             }, delay)
+        }
+    }
+
+    // the user took the call after all, so it doesn't belong to the silently blocked calls anymore
+    private fun forgetBlockedCall(details: Call.Details) {
+        val appContext = applicationContext
+        val number = details.handle?.schemeSpecificPart
+        val isHiddenNumber = SilentBlockNumberMatcher.isHiddenPresentation(details.handlePresentation)
+            || SilentBlockNumberMatcher.isHiddenNumber(number)
+        SilentBlockExecutor.execute {
+            SilentBlocker(appContext).forgetBlockedCall(number, isHiddenNumber, details.creationTimeMillis)
         }
     }
 
