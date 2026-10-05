@@ -1,6 +1,7 @@
 package org.fossify.phone.helpers
 
 import android.content.Context
+import android.telecom.TelecomManager
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
 import java.util.Locale
@@ -115,6 +116,15 @@ class SilentBlockNumberMatcher(context: Context) {
         /** Any two matching numbers are guaranteed to have the same comparable key. */
         fun comparableKey(number: String): String {
             return normalize(number).trimStart('+').takeLast(MIN_MATCHING_DIGITS)
+        }
+
+        /**
+         * True for withheld caller IDs: restricted, unknown and unavailable. Payphones show no number either, but
+         * they aren't hiding anything. Telecom and the call log use the same presentation values.
+         */
+        fun isHiddenPresentation(presentation: Int): Boolean {
+            return presentation != TelecomManager.PRESENTATION_ALLOWED
+                && presentation != TelecomManager.PRESENTATION_PAYPHONE
         }
 
         /** True for empty numbers and the placeholders the system call log uses for private or unknown callers. */

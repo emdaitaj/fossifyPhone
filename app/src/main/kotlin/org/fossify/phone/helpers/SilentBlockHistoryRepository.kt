@@ -3,7 +3,6 @@ package org.fossify.phone.helpers
 import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
-import android.database.sqlite.SQLiteDatabase
 import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getLongValue
 import org.fossify.commons.extensions.getStringValue
@@ -11,6 +10,7 @@ import org.fossify.commons.helpers.getQuestionMarks
 import org.fossify.phone.databases.SilentBlockDatabase
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_CALL_LOG_CLEANED
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_ID
+import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_IS_REMOVED
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_NAME
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_NUMBER
 import org.fossify.phone.databases.SilentBlockDatabase.Companion.COL_PHONE_ACCOUNT_ID
@@ -22,15 +22,28 @@ import org.fossify.phone.models.SilentBlockedCall
 
 /**
  * Access to the secret history of silently blocked calls. Use it from a background thread only.
+ *
+ * Calls the user removes from the history are only hidden at first, as the system call log cleanup still needs them
+ * for finding the rows Telecom writes later on. They are purged once the cleanup is done with them.
  */
 class SilentBlockHistoryRepository(context: Context) {
     private val database = SilentBlockDatabase.getInstance(context)
 
-    /** Returns the newest calls first. */
-    fun getCalls(limit: Int = MAX_HISTORY_SIZE): List<SilentBlockedCall> {
-        return query(selection = null, selectionArgs = null, orderBy = "$COL_TIMESTAMP DESC", limit = limit)
+    /**
+     * Returns the newest calls first.
+     *
+     * @param includeRemoved also return calls the user removed from the history, but which weren't purged yet
+     */
+    fun getCalls(includeRemoved: Boolean = false, limit: Int = MAX_HISTORY_SIZE): List<SilentBlockedCall> {
+        return query(
+            selection = if (includeRemoved) null else "$COL_IS_REMOVED = 0",
+            selectionArgs = null,
+            orderBy = "$COL_TIMESTAMP DESC",
+            limit = limit
+        )
     }
 
+    /** Returns every call in the given time range, including the removed ones. */
     fun getCallsBetween(fromTimestamp: Long, toTimestamp: Long): List<SilentBlockedCall> {
         return query(
             selection = "$COL_TIMESTAMP BETWEEN ? AND ?",
@@ -45,7 +58,7 @@ class SilentBlockHistoryRepository(context: Context) {
      */
     fun getCallsPendingCleanup(oldestTimestamp: Long, sweepFromTimestamp: Long): List<SilentBlockedCall> {
         return query(
-            selection = "$COL_TIMESTAMP >= ? AND ($COL_CALL_LOG_CLEANED = 0 OR $COL_TIMESTAMP >= ?)",
+            selection = getPendingSelection(),
             selectionArgs = arrayOf(oldestTimestamp.toString(), sweepFromTimestamp.toString()),
             orderBy = "$COL_TIMESTAMP ASC"
         )
@@ -74,29 +87,30 @@ class SilentBlockHistoryRepository(context: Context) {
     }
 
     fun markCallLogCleaned(ids: Collection<Long>) {
-        val values = ContentValues().apply {
-            put(COL_CALL_LOG_CLEANED, 1)
-        }
-
-        updateOrDelete(ids) { selection, args ->
-            update(TABLE_HISTORY, values, selection, args)
-        }
+        updateCalls(ids, ContentValues().apply { put(COL_CALL_LOG_CLEANED, 1) })
     }
 
-    fun deleteCalls(ids: Collection<Long>) {
-        updateOrDelete(ids) { selection, args ->
-            delete(TABLE_HISTORY, selection, args)
-        }
+    /** Hides the calls from the history, see the class description. */
+    fun removeCalls(ids: Collection<Long>) {
+        updateCalls(ids, ContentValues().apply { put(COL_IS_REMOVED, 1) })
     }
 
+    /** Hides every call from the history, see the class description. */
     fun clearHistory() {
-        database.writableDatabase.delete(TABLE_HISTORY, null, null)
+        val values = ContentValues().apply { put(COL_IS_REMOVED, 1) }
+        database.writableDatabase.update(TABLE_HISTORY, values, null, null)
     }
 
-    private fun updateOrDelete(
-        ids: Collection<Long>,
-        action: SQLiteDatabase.(String, Array<String>) -> Unit
-    ) {
+    /** Deletes the removed calls the system call log cleanup doesn't need anymore. */
+    fun purgeRemovedCalls(oldestTimestamp: Long, sweepFromTimestamp: Long) {
+        database.writableDatabase.delete(
+            TABLE_HISTORY,
+            "$COL_IS_REMOVED = 1 AND NOT (${getPendingSelection()})",
+            arrayOf(oldestTimestamp.toString(), sweepFromTimestamp.toString())
+        )
+    }
+
+    private fun updateCalls(ids: Collection<Long>, values: ContentValues) {
         if (ids.isEmpty()) {
             return
         }
@@ -104,7 +118,7 @@ class SilentBlockHistoryRepository(context: Context) {
         val db = database.writableDatabase
         ids.chunked(MAX_SQL_ARGS).forEach { chunk ->
             val selection = "$COL_ID IN (${getQuestionMarks(chunk.size)})"
-            db.action(selection, chunk.map { it.toString() }.toTypedArray())
+            db.update(TABLE_HISTORY, values, selection, chunk.map { it.toString() }.toTypedArray())
         }
     }
 
@@ -125,18 +139,22 @@ class SilentBlockHistoryRepository(context: Context) {
         return calls
     }
 
-    private fun Cursor.toCall() = SilentBlockedCall(
-        id = getLongValue(COL_ID),
-        number = getStringValue(COL_NUMBER).orEmpty(),
-        name = getStringValue(COL_NAME).orEmpty(),
-        timestamp = getLongValue(COL_TIMESTAMP),
-        reason = SilentBlockReason.fromId(getIntValue(COL_REASON)),
-        phoneAccountId = getStringValue(COL_PHONE_ACCOUNT_ID).orEmpty(),
-        isCallLogCleaned = getIntValue(COL_CALL_LOG_CLEANED) == 1
-    )
-
     companion object {
         const val MAX_HISTORY_SIZE = 1000
         private const val MAX_SQL_ARGS = 500
+
+        // expects the oldest timestamp and the sweep start as arguments
+        private fun getPendingSelection() =
+            "$COL_TIMESTAMP >= ? AND ($COL_CALL_LOG_CLEANED = 0 OR $COL_TIMESTAMP >= ?)"
+
+        private fun Cursor.toCall() = SilentBlockedCall(
+            id = getLongValue(COL_ID),
+            number = getStringValue(COL_NUMBER).orEmpty(),
+            name = getStringValue(COL_NAME).orEmpty(),
+            timestamp = getLongValue(COL_TIMESTAMP),
+            reason = SilentBlockReason.fromId(getIntValue(COL_REASON)),
+            phoneAccountId = getStringValue(COL_PHONE_ACCOUNT_ID).orEmpty(),
+            isCallLogCleaned = getIntValue(COL_CALL_LOG_CLEANED) == 1
+        )
     }
 }

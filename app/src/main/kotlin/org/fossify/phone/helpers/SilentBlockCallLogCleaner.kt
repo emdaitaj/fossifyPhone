@@ -33,6 +33,11 @@ class SilentBlockCallLogCleaner(context: Context) {
      */
     fun cleanCallLog(): Boolean {
         val now = System.currentTimeMillis()
+        historyRepository.purgeRemovedCalls(
+            oldestTimestamp = now - MAX_PENDING_AGE_MS,
+            sweepFromTimestamp = now - SWEEP_WINDOW_MS
+        )
+
         val pendingCalls = historyRepository.getCallsPendingCleanup(
             oldestTimestamp = now - MAX_PENDING_AGE_MS,
             sweepFromTimestamp = now - SWEEP_WINDOW_MS
@@ -65,7 +70,8 @@ class SilentBlockCallLogCleaner(context: Context) {
      */
     fun createCallLogFilter(): (number: String, isHiddenNumber: Boolean, type: Int, timestamp: Long) -> Boolean {
         val calls = try {
-            historyRepository.getCalls().sortedBy { it.timestamp }
+            // calls removed from the history still count, until their call log rows are gone
+            historyRepository.getCalls(includeRemoved = true).sortedBy { it.timestamp }
         } catch (_: Exception) {
             emptyList()
         }
@@ -136,7 +142,7 @@ class SilentBlockCallLogCleaner(context: Context) {
             while (cursor.moveToNext()) {
                 val number = cursor.getStringValueOrNull(Calls.NUMBER).orEmpty()
                 val presentation = cursor.getIntValueOrNull(Calls.NUMBER_PRESENTATION) ?: Calls.PRESENTATION_ALLOWED
-                val isHiddenNumber = presentation != Calls.PRESENTATION_ALLOWED
+                val isHiddenNumber = SilentBlockNumberMatcher.isHiddenPresentation(presentation)
                     || SilentBlockNumberMatcher.isHiddenNumber(number)
                 if (matcher.isSameCaller(call.number, call.isHiddenNumber, number, isHiddenNumber)) {
                     ids.add(cursor.getLongValue(Calls._ID).toString())
@@ -159,8 +165,11 @@ class SilentBlockCallLogCleaner(context: Context) {
         /** Calls are swept repeatedly for this long, a silently blocked call can keep ringing for minutes. */
         private const val SWEEP_WINDOW_MS = 15 * 60 * 1000L
 
-        /** Give up on calls that never showed up in the call log after this time. */
-        private const val MAX_PENDING_AGE_MS = 24 * 60 * 60 * 1000L
+        /**
+         * Give up on calls that never showed up in the call log after this time. A silently blocked call ends within
+         * minutes, and some systems never log it at all, the history keeps the call regardless.
+         */
+        private const val MAX_PENDING_AGE_MS = 60 * 60 * 1000L
 
         /** Quick in-process sweeps right after a call was blocked, the job below covers the process being killed. */
         private val IN_PROCESS_SWEEP_DELAYS_MS = longArrayOf(1500L, 5000L, 15000L, 45000L, 120000L, 300000L)

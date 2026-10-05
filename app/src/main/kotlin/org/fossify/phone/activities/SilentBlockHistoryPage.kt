@@ -68,7 +68,7 @@ class SilentBlockHistoryPage(
                     MENU_CALL -> activity.startCallWithConfirmationCheck(call.number, call.name.ifBlank { call.number })
                     MENU_COPY -> activity.copyToClipboard(call.number)
                     MENU_ALLOW -> allowCaller(call)
-                    MENU_REMOVE -> runUpdate { historyRepository.deleteCalls(listOf(call.id)) }
+                    MENU_REMOVE -> runUpdate { historyRepository.removeCalls(listOf(call.id)) }
                 }
                 true
             }

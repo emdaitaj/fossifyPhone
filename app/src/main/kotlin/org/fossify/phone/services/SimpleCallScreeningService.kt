@@ -80,14 +80,8 @@ class SimpleCallScreeningService : CallScreeningService() {
     private fun silentlyBlockCall(callDetails: Call.Details, decision: SilentBlockDecision.Block) {
         SilentBlockRegistry.markSilenced(callDetails)
 
-        val response = CallResponse.Builder()
-            .setDisallowCall(true)
-            .setRejectCall(false)
-            .setSkipCallLog(true)
-            .setSkipNotification(true)
-            .build()
-        respondToCall(callDetails, response)
-
+        // record the call before responding, Telecom unbinds the service right after the response and the process
+        // could be gone before the history record and the call log cleanup exist, a few milliseconds are affordable
         try {
             val timestamp = callDetails.creationTimeMillis.takeIf { it > 0 } ?: System.currentTimeMillis()
             SilentBlocker(this).recordBlockedCall(
@@ -97,8 +91,16 @@ class SimpleCallScreeningService : CallScreeningService() {
                 phoneAccountId = callDetails.accountHandle?.id.orEmpty()
             )
         } catch (_: Exception) {
-            // the call is blocked already, only the history record is missing
+            // the call gets blocked anyway, only the history record is missing
         }
+
+        val response = CallResponse.Builder()
+            .setDisallowCall(true)
+            .setRejectCall(false)
+            .setSkipCallLog(true)
+            .setSkipNotification(true)
+            .build()
+        respondToCall(callDetails, response)
     }
 
     private fun respondToCall(callDetails: Call.Details, isBlocked: Boolean) {

@@ -41,7 +41,8 @@ class SilentBlockDatabase private constructor(context: Context) :
                 $COL_TIMESTAMP INTEGER NOT NULL,
                 $COL_REASON INTEGER NOT NULL,
                 $COL_PHONE_ACCOUNT_ID TEXT NOT NULL DEFAULT '',
-                $COL_CALL_LOG_CLEANED INTEGER NOT NULL DEFAULT 0
+                $COL_CALL_LOG_CLEANED INTEGER NOT NULL DEFAULT 0,
+                $COL_IS_REMOVED INTEGER NOT NULL DEFAULT 0
             )
             """.trimIndent()
         )
@@ -73,6 +74,7 @@ class SilentBlockDatabase private constructor(context: Context) :
         const val COL_REASON = "reason"
         const val COL_PHONE_ACCOUNT_ID = "phone_account_id"
         const val COL_CALL_LOG_CLEANED = "call_log_cleaned"
+        const val COL_IS_REMOVED = "is_removed"
 
         @Volatile
         private var instance: SilentBlockDatabase? = null

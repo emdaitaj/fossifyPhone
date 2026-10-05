@@ -194,7 +194,11 @@ class DialpadActivity : SimpleActivity() {
         binding.apply {
             dialpadClearChar.setOnClickListener { clearChar(it) }
             dialpadClearChar.setOnLongClickListener { clearInput(); true }
-            dialpadCallButton.setOnClickListener { initCall(dialpadInput.value) }
+            dialpadCallButton.setOnClickListener {
+                if (!openSilentBlockSettingsIfSecretCode()) {
+                    initCall(dialpadInput.value)
+                }
+            }
             dialpadCallButton.setOnLongClickListener { initCallWithSimSelector() }
             dialpadInput.onTextChangeListener { dialpadValueChanged(it) }
             dialpadInput.requestFocus()
@@ -363,9 +367,7 @@ class DialpadActivity : SimpleActivity() {
     }
 
     private fun initCall(number: String = binding.dialpadInput.value, name: String? = null) {
-        if (SilentBlockConfig.isSecretCode(number)) {
-            openSilentBlockSettings()
-        } else if (number.isNotEmpty()) {
+        if (number.isNotEmpty()) {
             startCallWithConfirmationCheck(number, name ?: number)
             clearInputWithDelay()
         } else {
@@ -382,8 +384,7 @@ class DialpadActivity : SimpleActivity() {
 
     private fun initCallWithSimSelector(): Boolean {
         val number = binding.dialpadInput.value
-        return if (SilentBlockConfig.isSecretCode(number)) {
-            openSilentBlockSettings()
+        return if (openSilentBlockSettingsIfSecretCode()) {
             true
         } else if (areMultipleSIMsAvailable() && number.isNotEmpty()) {
             startCallWithConfirmationCheck(
@@ -398,13 +399,19 @@ class DialpadActivity : SimpleActivity() {
     }
 
     /**
-     * The secret code is never dialed. The dialpad is closed right away, so the code doesn't stay on the screen
-     * and the user ends up on the main screen once leaving the silent block screen.
+     * Opens the silent block screen if the user dialed its secret code with the call button. The code is never
+     * dialed, and the dialpad is closed right away, so the code doesn't stay on the screen and the user ends up on
+     * the main screen once leaving the silent block screen.
      */
-    private fun openSilentBlockSettings() {
+    private fun openSilentBlockSettingsIfSecretCode(): Boolean {
+        if (!SilentBlockConfig.isSecretCode(binding.dialpadInput.value)) {
+            return false
+        }
+
         clearInput()
         startActivity(Intent(this, SilentBlockActivity::class.java))
         finish()
+        return true
     }
 
     private fun speedDial(id: Int): Boolean {

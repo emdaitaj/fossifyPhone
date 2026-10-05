@@ -3,7 +3,6 @@ package org.fossify.phone.helpers
 import android.content.Context
 import android.net.Uri
 import android.provider.ContactsContract.PhoneLookup
-import android.telecom.TelecomManager
 import org.fossify.commons.extensions.getIntValue
 import org.fossify.commons.extensions.getMyContactsCursor
 import org.fossify.commons.extensions.getStringValue
@@ -43,13 +42,17 @@ class SilentBlocker(context: Context) {
             return SilentBlockDecision.NotHandled
         }
 
-        val isAllowedPresentation = presentation == TelecomManager.PRESENTATION_ALLOWED
-        if (!isAllowedPresentation || number == null || SilentBlockNumberMatcher.isHiddenNumber(number)) {
+        if (SilentBlockNumberMatcher.isHiddenPresentation(presentation)) {
             return if (config.blockHiddenNumbers) {
                 SilentBlockDecision.Block(SilentBlockReason.HIDDEN_NUMBER)
             } else {
                 SilentBlockDecision.NotHandled
             }
+        }
+
+        // e.g. payphones, there is nothing that could be matched
+        if (number == null || SilentBlockNumberMatcher.isHiddenNumber(number)) {
+            return SilentBlockDecision.NotHandled
         }
 
         val contacts = lookupSystemContacts(number)
